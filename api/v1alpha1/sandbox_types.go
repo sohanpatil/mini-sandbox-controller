@@ -32,7 +32,7 @@ type SandboxSpec struct {
 
 	// foo is an example field of Sandbox. Edit sandbox_types.go to remove/update
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	Image *string `json:"image,omitempty"`
 }
 
 // SandboxStatus defines the observed state of Sandbox.
@@ -52,10 +52,8 @@ type SandboxStatus struct {
 	// - "Degraded": the resource failed to reach or maintain its desired state
 	//
 	// The status of each condition is one of True, False, or Unknown.
-	// +listType=map
-	// +listMapKey=type
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Phase string `json:"phase,omitempty"`
 }
 
 // +kubebuilder:object:root=true
