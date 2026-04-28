@@ -109,13 +109,25 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, nil
+	return r.updatePhase(ctx, sandbox, string(pod.Status.Phase))
+}
+
+func (r *SandboxReconciler) updatePhase(ctx context.Context, sandbox *demov1alpha1.Sandbox, phase string) (ctrl.Result, error) {
+	// When a pod is created that is owned by Sandbox, Phase remains the same (Creating)
+	// Once pod creation completes, the SandboxController Reconcile is run again (as we watch for Pod CRUD owned by SandBox)
+	if sandbox.Status.Phase == phase {
+		return ctrl.Result{}, nil
+	}
+
+	sandbox.Status.Phase = phase
+	return ctrl.Result{}, r.Status().Update(ctx, sandbox)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SandboxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&demov1alpha1.Sandbox{}).
+		For(&demov1alpha1.Sandbox{}). // Reconcile Sandboxes when Sandboxes change,
+		// and also reconcile the relevant Sandbox when one of its owned Pods changes.
 		Owns(&corev1.Pod{}).
 		Named("sandbox").
 		Complete(r)
