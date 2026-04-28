@@ -40,24 +40,14 @@ spec:
             description: spec defines the desired state of Sandbox
             properties:
               image:
-                description: foo is an example field of Sandbox. Edit sandbox_types.go
-                  to remove/update
+                description: Image is the container image used for the Sandbox Pod.
                 type: string
             type: object
           status:
             description: status defines the observed state of Sandbox
             properties:
               phase:
-                description: |-
-                  conditions represent the current state of the Sandbox resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
+                description: Phase is the observed phase of the Sandbox Pod.
                 type: string
             type: object
         required:

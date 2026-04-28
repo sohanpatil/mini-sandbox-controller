@@ -25,33 +25,14 @@ import (
 
 // SandboxSpec defines the desired state of Sandbox
 type SandboxSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
-
-	// foo is an example field of Sandbox. Edit sandbox_types.go to remove/update
+	// Image is the container image used for the Sandbox Pod.
 	// +optional
 	Image *string `json:"image,omitempty"`
 }
 
 // SandboxStatus defines the observed state of Sandbox.
 type SandboxStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// conditions represent the current state of the Sandbox resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
+	// Phase is the observed phase of the Sandbox Pod.
 	// +optional
 	Phase string `json:"phase,omitempty"`
 }

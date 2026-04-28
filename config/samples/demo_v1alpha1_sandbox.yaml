@@ -7,3 +7,4 @@ metadata:
   name: sandbox-sample
 spec:
   # TODO(user): Add fields here
+  image: nginx
