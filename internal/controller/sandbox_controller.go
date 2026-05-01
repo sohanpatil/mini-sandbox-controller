@@ -37,10 +37,13 @@ type SandboxReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+const sandboxNameLabel = "demo.example.com/sandbox"
+
 // +kubebuilder:rbac:groups=demo.example.com,resources=sandboxes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=demo.example.com,resources=sandboxes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=demo.example.com,resources=sandboxes/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -81,6 +84,11 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      sandbox.Name,
 				Namespace: sandbox.Namespace,
+				Labels: map[string]string{
+					"app.kubernetes.io/name":       "mini-sandbox",
+					"app.kubernetes.io/managed-by": "mini-sandbox-controller",
+					sandboxNameLabel:               sandbox.Name,
+				},
 			},
 			Spec: corev1.PodSpec{
 				RestartPolicy: corev1.RestartPolicyNever,
@@ -109,6 +117,38 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	// create headless svc
+	service := &corev1.Service{}
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      sandbox.Name,
+		Namespace: sandbox.Namespace,
+	}, service)
+
+	if apierrors.IsNotFound(err) {
+		service = &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      sandbox.Name,
+				Namespace: sandbox.Namespace,
+			},
+			Spec: corev1.ServiceSpec{
+				ClusterIP: corev1.ClusterIPNone,
+				Selector: map[string]string{
+					sandboxNameLabel: sandbox.Name,
+				},
+			},
+		}
+
+		if err := ctrl.SetControllerReference(sandbox, service, r.Scheme); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if err := r.Create(ctx, service); err != nil {
+			return ctrl.Result{}, err
+		}
+	} else if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return r.updatePhase(ctx, sandbox, string(pod.Status.Phase))
 }
 
@@ -129,6 +169,7 @@ func (r *SandboxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&demov1alpha1.Sandbox{}). // Reconcile Sandboxes when Sandboxes change,
 		// and also reconcile the relevant Sandbox when one of its owned Pods changes.
 		Owns(&corev1.Pod{}).
+		Owns(&corev1.Service{}).
 		Named("sandbox").
 		Complete(r)
 }
