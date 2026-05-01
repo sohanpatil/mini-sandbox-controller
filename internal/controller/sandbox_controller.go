@@ -55,12 +55,7 @@ const sandboxNameLabel = "demo.example.com/sandbox"
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.3/pkg/reconcile
 func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
-
-	// TODO(user): your logic here
 	sandbox := &demov1alpha1.Sandbox{}
-
-	// This is the normal controller pattern: “load desired object; if it was deleted, stop.”
 	if err := r.Get(ctx, req.NamespacedName, sandbox); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -68,75 +63,26 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// Since your Image is *string, handle nil/empty:
 	if sandbox.Spec.Image == nil || *sandbox.Spec.Image == "" {
 		return ctrl.Result{}, nil
 	}
 
-	desiredReplicas := int32(1)
-	if sandbox.Spec.Replicas != nil {
-		desiredReplicas = *sandbox.Spec.Replicas
-	}
-
-	pod := &corev1.Pod{}
-	err := r.Get(ctx, types.NamespacedName{
-		Name:      sandbox.Name,
-		Namespace: sandbox.Namespace,
-	}, pod)
-
-	if desiredReplicas == 0 {
-		if err == nil {
-			log.Info("deleting pod because replicas is 0", "pod", pod.Name)
-			if err := r.Delete(ctx, pod); err != nil {
-				return ctrl.Result{}, err
-			}
-		} else if !apierrors.IsNotFound(err) {
+	if desiredReplicas(sandbox) == 0 {
+		if err := r.stopPod(ctx, sandbox); err != nil {
 			return ctrl.Result{}, err
 		}
-
 		if err := r.reconcileService(ctx, sandbox); err != nil {
 			return ctrl.Result{}, err
 		}
-
 		return r.updateStatus(ctx, sandbox, "Stopped")
 	}
 
-	if apierrors.IsNotFound(err) {
-		pod = &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      sandbox.Name,
-				Namespace: sandbox.Namespace,
-				Labels: map[string]string{
-					"app.kubernetes.io/name":       "mini-sandbox",
-					"app.kubernetes.io/managed-by": "mini-sandbox-controller",
-					sandboxNameLabel:               sandbox.Name,
-				},
-			},
-			Spec: corev1.PodSpec{
-				RestartPolicy: corev1.RestartPolicyNever,
-				Containers: []corev1.Container{
-					{
-						Name:  "main",
-						Image: *sandbox.Spec.Image,
-					},
-				},
-			},
-		}
-
-		if err := ctrl.SetControllerReference(sandbox, pod, r.Scheme); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		log.Info("creating pod for sandbox", "pod", pod.Name, "image", *sandbox.Spec.Image)
-		if err := r.Create(ctx, pod); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, nil
-	}
-
+	pod, created, err := r.reconcilePod(ctx, sandbox)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+	if created {
+		return ctrl.Result{}, nil
 	}
 
 	if err := r.reconcileService(ctx, sandbox); err != nil {
@@ -144,6 +90,85 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	return r.updateStatus(ctx, sandbox, string(pod.Status.Phase))
+}
+
+func desiredReplicas(sandbox *demov1alpha1.Sandbox) int32 {
+	if sandbox.Spec.Replicas == nil {
+		return 1
+	}
+	return *sandbox.Spec.Replicas
+}
+
+func (r *SandboxReconciler) reconcilePod(ctx context.Context, sandbox *demov1alpha1.Sandbox) (*corev1.Pod, bool, error) {
+	pod := &corev1.Pod{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      sandbox.Name,
+		Namespace: sandbox.Namespace,
+	}, pod)
+
+	if apierrors.IsNotFound(err) {
+		log := logf.FromContext(ctx)
+		pod = podForSandbox(sandbox, *sandbox.Spec.Image)
+		if err := ctrl.SetControllerReference(sandbox, pod, r.Scheme); err != nil {
+			return nil, false, err
+		}
+		log.Info("creating pod for sandbox", "pod", pod.Name, "image", *sandbox.Spec.Image)
+		if err := r.Create(ctx, pod); err != nil {
+			return nil, false, err
+		}
+		return pod, true, nil
+	}
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	return pod, false, nil
+}
+
+func podForSandbox(sandbox *demov1alpha1.Sandbox, image string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sandbox.Name,
+			Namespace: sandbox.Namespace,
+			Labels:    labelsForSandbox(sandbox),
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+			Containers: []corev1.Container{
+				{
+					Name:  "main",
+					Image: image,
+				},
+			},
+		},
+	}
+}
+
+func labelsForSandbox(sandbox *demov1alpha1.Sandbox) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/name":       "mini-sandbox",
+		"app.kubernetes.io/managed-by": "mini-sandbox-controller",
+		sandboxNameLabel:               sandbox.Name,
+	}
+}
+
+func (r *SandboxReconciler) stopPod(ctx context.Context, sandbox *demov1alpha1.Sandbox) error {
+	log := logf.FromContext(ctx)
+	pod := &corev1.Pod{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      sandbox.Name,
+		Namespace: sandbox.Namespace,
+	}, pod)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	log.Info("deleting pod because replicas is 0", "pod", pod.Name)
+	return r.Delete(ctx, pod)
 }
 
 func (r *SandboxReconciler) reconcileService(ctx context.Context, sandbox *demov1alpha1.Sandbox) error {
@@ -198,7 +223,6 @@ func (r *SandboxReconciler) updateStatus(ctx context.Context, sandbox *demov1alp
 	sandbox.Status.ServiceDNS = serviceDNS
 
 	return ctrl.Result{}, r.Status().Update(ctx, sandbox)
-
 }
 
 // SetupWithManager sets up the controller with the Manager.
