@@ -42,12 +42,29 @@ spec:
               image:
                 description: Image is the container image used for the Sandbox Pod.
                 type: string
+              replicas:
+                default: 1
+                description: |-
+                  Replicas is the desired number of Sandbox Pods.
+                  Only 0 and 1 are supported.
+                format: int32
+                maximum: 1
+                minimum: 0
+                type: integer
             type: object
           status:
             description: status defines the observed state of Sandbox
             properties:
               phase:
                 description: Phase is the observed phase of the Sandbox Pod.
+                type: string
+              serviceDNS:
+                description: ServiceDNS is the in-cluster DNS name for the Sandbox
+                  Service.
+                type: string
+              serviceName:
+                description: ServiceName is the name of the Service created for the
+                  Sandbox.
                 type: string
             type: object
         required:

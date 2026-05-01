@@ -28,6 +28,14 @@ type SandboxSpec struct {
 	// Image is the container image used for the Sandbox Pod.
 	// +optional
 	Image *string `json:"image,omitempty"`
+
+	// Replicas is the desired number of Sandbox Pods.
+	// Only 0 and 1 are supported.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1
+	// +kubebuilder:default=1
+	// +optional
+	Replicas *int32 `json:"replicas,omitempty"`
 }
 
 // SandboxStatus defines the observed state of Sandbox.
@@ -35,6 +43,14 @@ type SandboxStatus struct {
 	// Phase is the observed phase of the Sandbox Pod.
 	// +optional
 	Phase string `json:"phase,omitempty"`
+
+	// ServiceName is the name of the Service created for the Sandbox.
+	// +optional
+	ServiceName string `json:"serviceName,omitempty"`
+
+	// ServiceDNS is the in-cluster DNS name for the Sandbox Service.
+	// +optional
+	ServiceDNS string `json:"serviceDNS,omitempty"`
 }
 
 // +kubebuilder:object:root=true

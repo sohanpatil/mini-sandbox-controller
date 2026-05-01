@@ -73,11 +73,33 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
+	desiredReplicas := int32(1)
+	if sandbox.Spec.Replicas != nil {
+		desiredReplicas = *sandbox.Spec.Replicas
+	}
+
 	pod := &corev1.Pod{}
 	err := r.Get(ctx, types.NamespacedName{
 		Name:      sandbox.Name,
 		Namespace: sandbox.Namespace,
 	}, pod)
+
+	if desiredReplicas == 0 {
+		if err == nil {
+			log.Info("deleting pod because replicas is 0", "pod", pod.Name)
+			if err := r.Delete(ctx, pod); err != nil {
+				return ctrl.Result{}, err
+			}
+		} else if !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+
+		if err := r.reconcileService(ctx, sandbox); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return r.updateStatus(ctx, sandbox, "Stopped")
+	}
 
 	if apierrors.IsNotFound(err) {
 		pod = &corev1.Pod{
@@ -117,9 +139,16 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// create headless svc
+	if err := r.reconcileService(ctx, sandbox); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return r.updateStatus(ctx, sandbox, string(pod.Status.Phase))
+}
+
+func (r *SandboxReconciler) reconcileService(ctx context.Context, sandbox *demov1alpha1.Sandbox) error {
 	service := &corev1.Service{}
-	err = r.Get(ctx, types.NamespacedName{
+	err := r.Get(ctx, types.NamespacedName{
 		Name:      sandbox.Name,
 		Namespace: sandbox.Namespace,
 	}, service)
@@ -139,28 +168,37 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 
 		if err := ctrl.SetControllerReference(sandbox, service, r.Scheme); err != nil {
-			return ctrl.Result{}, err
+			return err
 		}
 
 		if err := r.Create(ctx, service); err != nil {
-			return ctrl.Result{}, err
+			return err
 		}
 	} else if err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
-	return r.updatePhase(ctx, sandbox, string(pod.Status.Phase))
+	return nil
 }
 
-func (r *SandboxReconciler) updatePhase(ctx context.Context, sandbox *demov1alpha1.Sandbox, phase string) (ctrl.Result, error) {
+func (r *SandboxReconciler) updateStatus(ctx context.Context, sandbox *demov1alpha1.Sandbox, phase string) (ctrl.Result, error) {
 	// When a pod is created that is owned by Sandbox, Phase remains the same (Creating)
 	// Once pod creation completes, the SandboxController Reconcile is run again (as we watch for Pod CRUD owned by SandBox)
-	if sandbox.Status.Phase == phase {
+	serviceName := sandbox.Name
+	serviceDNS := serviceName + "." + sandbox.Namespace + ".svc.cluster.local"
+
+	if sandbox.Status.Phase == phase &&
+		sandbox.Status.ServiceName == serviceName &&
+		sandbox.Status.ServiceDNS == serviceDNS {
 		return ctrl.Result{}, nil
 	}
 
 	sandbox.Status.Phase = phase
+	sandbox.Status.ServiceName = serviceName
+	sandbox.Status.ServiceDNS = serviceDNS
+
 	return ctrl.Result{}, r.Status().Update(ctx, sandbox)
+
 }
 
 // SetupWithManager sets up the controller with the Manager.
