@@ -67,6 +67,9 @@ func (r *SandboxClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	sandboxName := claim.Name
+	if claim.Status.SandboxName != "" {
+		sandboxName = claim.Status.SandboxName
+	}
 
 	sandbox := &demov1alpha1.Sandbox{}
 	err := r.Get(ctx, client.ObjectKey{
@@ -75,6 +78,18 @@ func (r *SandboxClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}, sandbox)
 
 	if apierrors.IsNotFound(err) {
+		warmSandbox, err := r.findAvailableWarmSandbox(ctx, claim)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if warmSandbox != nil {
+			if err := r.adoptWarmSandbox(ctx, claim, warmSandbox); err != nil {
+				return ctrl.Result{}, err
+			}
+			return r.updateStatus(ctx, claim, warmSandbox)
+		}
+
 		sandbox = &demov1alpha1.Sandbox{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      sandboxName,
@@ -94,7 +109,7 @@ func (r *SandboxClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{}, nil
+		return r.updateStatus(ctx, claim, sandbox)
 	}
 
 	if err != nil {
@@ -102,6 +117,54 @@ func (r *SandboxClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	return r.updateStatus(ctx, claim, sandbox)
+}
+
+func (r *SandboxClaimReconciler) adoptWarmSandbox(ctx context.Context, claim *demov1alpha1.SandboxClaim, sandbox *demov1alpha1.Sandbox) error {
+	patch := client.MergeFrom(sandbox.DeepCopy())
+
+	sandbox.OwnerReferences = nil
+	if err := ctrl.SetControllerReference(claim, sandbox, r.Scheme); err != nil {
+		return err
+	}
+
+	if sandbox.Labels == nil {
+		sandbox.Labels = map[string]string{}
+	}
+	sandbox.Labels[claimLabel] = claim.Name
+
+	return r.Patch(ctx, sandbox, patch)
+}
+
+func (r *SandboxClaimReconciler) findAvailableWarmSandbox(ctx context.Context, claim *demov1alpha1.SandboxClaim) (*demov1alpha1.Sandbox, error) {
+	sandboxList := &demov1alpha1.SandboxList{}
+	if err := r.List(ctx, sandboxList,
+		client.InNamespace(claim.Namespace),
+		client.MatchingLabels{templateRefLabel: claim.Spec.TemplateRef.Name},
+	); err != nil {
+		return nil, err
+	}
+
+	for i := range sandboxList.Items {
+		sandbox := &sandboxList.Items[i]
+
+		owner := metav1.GetControllerOf(sandbox)
+		if owner == nil {
+			continue
+		}
+
+		if owner.APIVersion != demov1alpha1.GroupVersion.String() ||
+			owner.Kind != "SandboxWarmPool" {
+			continue
+		}
+
+		if sandbox.Status.Phase != "Running" {
+			continue
+		}
+
+		return sandbox, nil
+	}
+
+	return nil, nil
 }
 
 func (r *SandboxClaimReconciler) updateStatus(ctx context.Context, claim *demov1alpha1.SandboxClaim, sandbox *demov1alpha1.Sandbox) (ctrl.Result, error) {

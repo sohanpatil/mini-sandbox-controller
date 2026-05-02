@@ -38,8 +38,6 @@ type SandboxReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-const sandboxNameLabel = "demo.example.com/sandbox"
-
 // +kubebuilder:rbac:groups=demo.example.com,resources=sandboxes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=demo.example.com,resources=sandboxes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=demo.example.com,resources=sandboxes/finalizers,verbs=update

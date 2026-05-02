@@ -1,8 +1,7 @@
 apiVersion: demo.example.com/v1alpha1
-kind: SandboxWarmPool
+kind: SandboxClaim
 metadata:
-  name: python-pool
+  name: adopted-claim
 spec:
-  replicas: 2
   templateRef:
     name: python-template
