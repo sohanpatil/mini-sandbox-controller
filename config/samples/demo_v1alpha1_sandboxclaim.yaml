@@ -1,0 +1,9 @@
+apiVersion: demo.example.com/v1alpha1
+kind: SandboxClaim
+metadata:
+  labels:
+    app.kubernetes.io/name: mini-sandbox-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: sandboxclaim-sample
+spec:
+  # TODO(user): Add fields here

@@ -21,7 +21,9 @@ rules:
 - apiGroups:
   - demo.example.com
   resources:
+  - sandboxclaims
   - sandboxes
+  - sandboxtemplates
   verbs:
   - create
   - delete
@@ -33,13 +35,17 @@ rules:
 - apiGroups:
   - demo.example.com
   resources:
+  - sandboxclaims/finalizers
   - sandboxes/finalizers
+  - sandboxtemplates/finalizers
   verbs:
   - update
 - apiGroups:
   - demo.example.com
   resources:
+  - sandboxclaims/status
   - sandboxes/status
+  - sandboxtemplates/status
   verbs:
   - get
   - patch

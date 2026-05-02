@@ -1,0 +1,73 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: sandboxtemplates.demo.example.com
+spec:
+  group: demo.example.com
+  names:
+    kind: SandboxTemplate
+    listKind: SandboxTemplateList
+    plural: sandboxtemplates
+    singular: sandboxtemplate
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: SandboxTemplate is the Schema for the sandboxtemplates API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of SandboxTemplate
+            properties:
+              image:
+                description: Image is the container image used for Sandboxes created
+                  from this template.
+                type: string
+              storage:
+                description: Storage describes optional persistent storage for Sandboxes
+                  created from this template.
+                properties:
+                  mountPath:
+                    default: /data
+                    description: MountPath is where the volume is mounted inside the
+                      container.
+                    type: string
+                  size:
+                    description: Size is the requested storage size, for example "1Gi".
+                    type: string
+                required:
+                - size
+                type: object
+            required:
+            - image
+            type: object
+          status:
+            description: status defines the observed state of SandboxTemplate
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
