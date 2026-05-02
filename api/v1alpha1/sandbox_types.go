@@ -36,6 +36,22 @@ type SandboxSpec struct {
 	// +kubebuilder:default=1
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty"`
+
+	// Storage describes optional persistent storage for the Sandbox.
+	// +optional
+	Storage *SandboxStorageSpec `json:"storage,omitempty"`
+}
+
+// SandboxStorageSpec describes optional persistent storage for a Sandbox.
+type SandboxStorageSpec struct {
+	// Size is the requested storage size, for example "1Gi".
+	// +required
+	Size string `json:"size"`
+
+	// MountPath is where the volume is mounted inside the container.
+	// +kubebuilder:default=/data
+	// +optional
+	MountPath string `json:"mountPath,omitempty"`
 }
 
 // SandboxStatus defines the observed state of Sandbox.

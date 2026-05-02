@@ -21,6 +21,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -44,6 +45,7 @@ const sandboxNameLabel = "demo.example.com/sandbox"
 // +kubebuilder:rbac:groups=demo.example.com,resources=sandboxes/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -75,6 +77,10 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 		return r.updateStatus(ctx, sandbox, "Stopped")
+	}
+
+	if err := r.reconcilePVC(ctx, sandbox); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	pod, created, err := r.reconcilePod(ctx, sandbox)
@@ -127,21 +133,42 @@ func (r *SandboxReconciler) reconcilePod(ctx context.Context, sandbox *demov1alp
 }
 
 func podForSandbox(sandbox *demov1alpha1.Sandbox, image string) *corev1.Pod {
+	container := corev1.Container{
+		Name:  "main",
+		Image: image,
+	}
+
+	podSpec := corev1.PodSpec{
+		RestartPolicy: corev1.RestartPolicyNever,
+		Containers: []corev1.Container{
+			container,
+		},
+	}
+
+	if sandbox.Spec.Storage != nil {
+		volumeName := "data"
+		podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+			Name: volumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: pvcNameForSandbox(sandbox),
+				},
+			},
+		})
+
+		podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      volumeName,
+			MountPath: storageMountPath(sandbox),
+		})
+	}
+
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      sandbox.Name,
 			Namespace: sandbox.Namespace,
 			Labels:    labelsForSandbox(sandbox),
 		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			Containers: []corev1.Container{
-				{
-					Name:  "main",
-					Image: image,
-				},
-			},
-		},
+		Spec: podSpec,
 	}
 }
 
@@ -151,6 +178,57 @@ func labelsForSandbox(sandbox *demov1alpha1.Sandbox) map[string]string {
 		"app.kubernetes.io/managed-by": "mini-sandbox-controller",
 		sandboxNameLabel:               sandbox.Name,
 	}
+}
+
+func storageMountPath(sandbox *demov1alpha1.Sandbox) string {
+	if sandbox.Spec.Storage == nil || sandbox.Spec.Storage.MountPath == "" {
+		return "/data"
+	}
+	return sandbox.Spec.Storage.MountPath
+}
+
+func pvcNameForSandbox(sandbox *demov1alpha1.Sandbox) string {
+	return sandbox.Name + "-data"
+}
+
+func (r *SandboxReconciler) reconcilePVC(ctx context.Context, sandbox *demov1alpha1.Sandbox) error {
+	if sandbox.Spec.Storage == nil {
+		return nil
+	}
+
+	pvc := &corev1.PersistentVolumeClaim{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      pvcNameForSandbox(sandbox),
+		Namespace: sandbox.Namespace,
+	}, pvc)
+
+	if apierrors.IsNotFound(err) {
+		pvc = &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pvcNameForSandbox(sandbox),
+				Namespace: sandbox.Namespace,
+				Labels:    labelsForSandbox(sandbox),
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse(sandbox.Spec.Storage.Size),
+					},
+				},
+			},
+		}
+
+		if err := ctrl.SetControllerReference(sandbox, pvc, r.Scheme); err != nil {
+			return err
+		}
+
+		return r.Create(ctx, pvc)
+	}
+
+	return err
 }
 
 func (r *SandboxReconciler) stopPod(ctx context.Context, sandbox *demov1alpha1.Sandbox) error {

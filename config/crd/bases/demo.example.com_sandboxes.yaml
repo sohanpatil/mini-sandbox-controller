@@ -51,6 +51,21 @@ spec:
                 maximum: 1
                 minimum: 0
                 type: integer
+              storage:
+                description: Storage describes optional persistent storage for the
+                  Sandbox.
+                properties:
+                  mountPath:
+                    default: /data
+                    description: MountPath is where the volume is mounted inside the
+                      container.
+                    type: string
+                  size:
+                    description: Size is the requested storage size, for example "1Gi".
+                    type: string
+                required:
+                - size
+                type: object
             type: object
           status:
             description: status defines the observed state of Sandbox
