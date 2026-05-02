@@ -23,39 +23,29 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// SandboxClaimSpec defines the desired state of SandboxClaim
-type SandboxClaimSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+// SandboxTemplateRef references a SandboxTemplate.
+type SandboxTemplateRef struct {
+	// Name is the name of the SandboxTemplate.
+	// +required
+	Name string `json:"name"`
+}
 
-	// foo is an example field of SandboxClaim. Edit sandboxclaim_types.go to remove/update
-	// +optional
-	Foo *string `json:"foo,omitempty"`
+// SandboxClaimSpec defines a request for a Sandbox from a template.
+type SandboxClaimSpec struct {
+	// TemplateRef references the SandboxTemplate to instantiate.
+	// +required
+	TemplateRef SandboxTemplateRef `json:"templateRef"`
 }
 
 // SandboxClaimStatus defines the observed state of SandboxClaim.
 type SandboxClaimStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// conditions represent the current state of the SandboxClaim resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
-	// +listType=map
-	// +listMapKey=type
+	// SandboxName is the name of the Sandbox created for this claim.
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	SandboxName string `json:"sandboxName,omitempty"`
+
+	// Phase mirrors the phase of the created Sandbox.
+	// +optional
+	Phase string `json:"phase,omitempty"`
 }
 
 // +kubebuilder:object:root=true

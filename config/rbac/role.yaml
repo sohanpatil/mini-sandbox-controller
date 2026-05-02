@@ -24,6 +24,7 @@ rules:
   - sandboxclaims
   - sandboxes
   - sandboxtemplates
+  - sandboxwarmpools
   verbs:
   - create
   - delete
@@ -38,6 +39,7 @@ rules:
   - sandboxclaims/finalizers
   - sandboxes/finalizers
   - sandboxtemplates/finalizers
+  - sandboxwarmpools/finalizers
   verbs:
   - update
 - apiGroups:
@@ -46,6 +48,7 @@ rules:
   - sandboxclaims/status
   - sandboxes/status
   - sandboxtemplates/status
+  - sandboxwarmpools/status
   verbs:
   - get
   - patch

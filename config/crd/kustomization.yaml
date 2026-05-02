@@ -5,6 +5,7 @@ resources:
 - bases/demo.example.com_sandboxes.yaml
 - bases/demo.example.com_sandboxtemplates.yaml
 - bases/demo.example.com_sandboxclaims.yaml
+- bases/demo.example.com_sandboxwarmpools.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

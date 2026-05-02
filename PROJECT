@@ -36,4 +36,13 @@ resources:
   kind: SandboxClaim
   path: example.com/mini-sandbox-controller/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: example.com
+  group: demo
+  kind: SandboxWarmPool
+  path: example.com/mini-sandbox-controller/api/v1alpha1
+  version: v1alpha1
 version: "3"

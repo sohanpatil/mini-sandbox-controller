@@ -3,4 +3,5 @@ resources:
 - demo_v1alpha1_sandbox.yaml
 - demo_v1alpha1_sandboxtemplate.yaml
 - demo_v1alpha1_sandboxclaim.yaml
+- demo_v1alpha1_sandboxwarmpool.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

@@ -19,10 +19,11 @@ package controller
 import (
 	"context"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	demov1alpha1 "example.com/mini-sandbox-controller/api/v1alpha1"
 )
@@ -36,6 +37,8 @@ type SandboxClaimReconciler struct {
 // +kubebuilder:rbac:groups=demo.example.com,resources=sandboxclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=demo.example.com,resources=sandboxclaims/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=demo.example.com,resources=sandboxclaims/finalizers,verbs=update
+// +kubebuilder:rbac:groups=demo.example.com,resources=sandboxes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=demo.example.com,resources=sandboxtemplates,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -47,17 +50,81 @@ type SandboxClaimReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.3/pkg/reconcile
 func (r *SandboxClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	claim := &demov1alpha1.SandboxClaim{}
+	if err := r.Get(ctx, req.NamespacedName, claim); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
 
-	// TODO(user): your logic here
+	template := &demov1alpha1.SandboxTemplate{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Name:      claim.Spec.TemplateRef.Name,
+		Namespace: claim.Namespace,
+	}, template); err != nil {
+		return ctrl.Result{}, err
+	}
 
-	return ctrl.Result{}, nil
+	sandboxName := claim.Name
+
+	sandbox := &demov1alpha1.Sandbox{}
+	err := r.Get(ctx, client.ObjectKey{
+		Name:      sandboxName,
+		Namespace: claim.Namespace,
+	}, sandbox)
+
+	if apierrors.IsNotFound(err) {
+		sandbox = &demov1alpha1.Sandbox{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      sandboxName,
+				Namespace: claim.Namespace,
+			},
+			Spec: demov1alpha1.SandboxSpec{
+				Image:   &template.Spec.Image,
+				Storage: template.Spec.Storage,
+			},
+		}
+
+		if err := ctrl.SetControllerReference(claim, sandbox, r.Scheme); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if err := r.Create(ctx, sandbox); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return r.updateStatus(ctx, claim, sandbox)
+}
+
+func (r *SandboxClaimReconciler) updateStatus(ctx context.Context, claim *demov1alpha1.SandboxClaim, sandbox *demov1alpha1.Sandbox) (ctrl.Result, error) {
+	sandboxName := sandbox.Name
+	phase := sandbox.Status.Phase
+
+	if claim.Status.SandboxName == sandboxName &&
+		claim.Status.Phase == phase {
+		return ctrl.Result{}, nil
+	}
+
+	claim.Status.SandboxName = sandboxName
+	claim.Status.Phase = phase
+
+	return ctrl.Result{}, r.Status().Update(ctx, claim)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SandboxClaimReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&demov1alpha1.SandboxClaim{}).
+		Owns(&demov1alpha1.Sandbox{}).
 		Named("sandboxclaim").
 		Complete(r)
+
 }

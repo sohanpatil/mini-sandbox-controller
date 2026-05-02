@@ -22,6 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the mini-sandbox-controller itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- sandboxwarmpool_admin_role.yaml
+- sandboxwarmpool_editor_role.yaml
+- sandboxwarmpool_viewer_role.yaml
 - sandboxclaim_admin_role.yaml
 - sandboxclaim_editor_role.yaml
 - sandboxclaim_viewer_role.yaml
