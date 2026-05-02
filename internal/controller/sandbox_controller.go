@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"time"
 
+	demov1alpha1 "example.com/mini-sandbox-controller/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -28,8 +30,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-	demov1alpha1 "example.com/mini-sandbox-controller/api/v1alpha1"
 )
 
 // SandboxReconciler reconciles a Sandbox object
@@ -69,6 +69,17 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
+	expired, requeueAfter := sandboxExpired(sandbox, time.Now())
+	if expired {
+		if err := r.stopPod(ctx, sandbox); err != nil {
+			return ctrl.Result{}, err
+		}
+		if err := r.reconcileService(ctx, sandbox); err != nil {
+			return ctrl.Result{}, err
+		}
+		return r.updateStatus(ctx, sandbox, "Expired")
+	}
+
 	if desiredReplicas(sandbox) == 0 {
 		if err := r.stopPod(ctx, sandbox); err != nil {
 			return ctrl.Result{}, err
@@ -95,7 +106,14 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	return r.updateStatus(ctx, sandbox, string(pod.Status.Phase))
+	result, err := r.updateStatus(ctx, sandbox, string(pod.Status.Phase))
+	if err != nil {
+		return result, err
+	}
+	if requeueAfter > 0 {
+		result.RequeueAfter = requeueAfter
+	}
+	return result, nil
 }
 
 func desiredReplicas(sandbox *demov1alpha1.Sandbox) int32 {
@@ -103,6 +121,19 @@ func desiredReplicas(sandbox *demov1alpha1.Sandbox) int32 {
 		return 1
 	}
 	return *sandbox.Spec.Replicas
+}
+
+func sandboxExpired(sandbox *demov1alpha1.Sandbox, now time.Time) (bool, time.Duration) {
+	if sandbox.Spec.ShutdownTime == nil {
+		return false, 0
+	}
+
+	shutdownTime := sandbox.Spec.ShutdownTime.Time
+	if !now.Before(shutdownTime) {
+		return true, 0
+	}
+
+	return false, shutdownTime.Sub(now)
 }
 
 func (r *SandboxReconciler) reconcilePod(ctx context.Context, sandbox *demov1alpha1.Sandbox) (*corev1.Pod, bool, error) {

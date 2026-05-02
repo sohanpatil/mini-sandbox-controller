@@ -51,6 +51,10 @@ spec:
                 maximum: 1
                 minimum: 0
                 type: integer
+              shutdownTime:
+                description: ShutdownTime is the time when the Sandbox should expire.
+                format: date-time
+                type: string
               storage:
                 description: Storage describes optional persistent storage for the
                   Sandbox.

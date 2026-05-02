@@ -40,6 +40,11 @@ type SandboxSpec struct {
 	// Storage describes optional persistent storage for the Sandbox.
 	// +optional
 	Storage *SandboxStorageSpec `json:"storage,omitempty"`
+
+	// ShutdownTime is the time when the Sandbox should expire.
+	// +kubebuilder:validation:Format="date-time"
+	// +optional
+	ShutdownTime *metav1.Time `json:"shutdownTime,omitempty"`
 }
 
 // SandboxStorageSpec describes optional persistent storage for a Sandbox.
